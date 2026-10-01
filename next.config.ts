@@ -19,6 +19,14 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async rewrites() {
+    return [
+      {
+        source: '/api/ml/:path*',
+        destination: 'https://virtual-cfo-ml-ewgafqanc3f7hfft.centralindia-01.azurewebsites.net/:path*',
+      },
+    ];
+  },
   output: 'standalone',
   transpilePackages: ['motion'],
   webpack: (config, {dev}) => {

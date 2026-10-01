@@ -38,12 +38,10 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const success = await login(email, password);
-      if (success) {
-        // Redirection handled by useAuth watcher or manual push
-        router.push('/upload');
-      } else {
+      if (!success) {
         setError('Invalid email address or incorrect password. Please check your credentials or register a new account.');
       }
+      // On success, the useAuth watcher will automatically handle redirection based on user role
     } catch (err) {
       setError('An error occurred during verification. Please try again.');
     } finally {

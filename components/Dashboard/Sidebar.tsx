@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   LayoutDashboard, 
   BarChart3, 
@@ -11,23 +11,31 @@ import {
   LogOut,
   ChevronRight,
   X,
-  Wallet
+  Wallet,
+  UserPlus,
+  Upload,
+  FileText
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { InviteModal } from './InviteModal';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Revenue & Expense', href: '/' },
-  { icon: Wallet, label: 'Working Capital', href: '/working-capital' },
+  // { icon: Wallet, label: 'Working Capital', href: '/working-capital' },
   { icon: BarChart3, label: 'Forecasting', href: '/forecasting' },
   { icon: PieChart, label: 'Revenue by Customer', href: '/revenue-by-customer' },
   { icon: TrendingUp, label: 'Trends', href: '/trends' },
+  { icon: FileText, label: 'Proforma Income Statement', href: '/proforma-income-statement' },
+  { icon: FileText, label: 'Proforma Balance Sheet', href: '/proforma-balance-sheet' },
+  { icon: FileText, label: 'Proforma Cash Flow Statement', href: '/proforma-cash-flow-statement' },
 ];
 
 const secondaryItems = [
-  { icon: Settings, label: 'Settings' },
+  { icon: UserPlus, label: 'Invite Users', action: 'invite' },
+  { icon: Upload, label: 'Manage Upload', action: 'upload' },
   { icon: HelpCircle, label: 'Support' },
 ];
 
@@ -38,10 +46,13 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, logout } = useAuth();
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
 
   return (
     <>
+      <InviteModal isOpen={isInviteOpen} onClose={() => setIsInviteOpen(false)} />
       {/* Mobile Overlay */}
       {isOpen && (
         <div 
@@ -104,6 +115,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             {secondaryItems.map((item) => (
               <button
                 key={item.label}
+                onClick={() => {
+                  if (item.action === 'invite') {
+                    setIsInviteOpen(true);
+                  } else if (item.action === 'upload') {
+                    router.push('/upload');
+                  }
+                }}
                 className="w-full flex items-center gap-3 px-3 py-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-50 dark:hover:bg-zinc-900 rounded-lg transition-all duration-200"
               >
                 <item.icon className="w-4 h-4" />

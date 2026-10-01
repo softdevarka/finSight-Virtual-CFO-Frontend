@@ -61,6 +61,7 @@ export default function SignUpPage() {
 
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -70,6 +71,7 @@ export default function SignUpPage() {
       [name]: value
     }));
     if (error) setError(null);
+    if (successMsg) setSuccessMsg(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -85,6 +87,7 @@ export default function SignUpPage() {
     }
 
     setLoading(true);
+    setSuccessMsg(null);
     try {
       const profile = {
         company_name: formData.company_name,
@@ -97,15 +100,9 @@ export default function SignUpPage() {
 
       const success = await signup(profile, formData.password);
       if (success) {
-        // Automatically perform login and head to upload page
-        const loginSuccess = await login(formData.email, formData.password);
-        if (loginSuccess) {
-          router.push('/upload');
-        } else {
-          router.push('/login');
-        }
+        setSuccessMsg('Account creation successful. Please proceed to Sign In.');
       } else {
-        setError('This email is already registered. Please login or use a different email.');
+        setError('Email already exists. Please login or use a different email.');
       }
     } catch (err) {
       setError('An error occurred during registration. Please try again.');
@@ -191,6 +188,16 @@ export default function SignUpPage() {
                 className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 text-center"
               >
                 {error}
+              </motion.div>
+            )}
+            
+            {successMsg && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs font-bold text-emerald-600 dark:text-emerald-400 text-center"
+              >
+                {successMsg}
               </motion.div>
             )}
 

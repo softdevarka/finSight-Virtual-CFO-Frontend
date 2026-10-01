@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/Dashboard/Sidebar';
-import { Header } from '@/components/Dashboard/Header';
 import { IncomeExpenseChart, TrendLineChart } from '@/components/Dashboard/TrendsCharts';
 import { motion } from 'motion/react';
+import { Menu } from 'lucide-react';
 import { 
   ChevronDown, 
   Filter, 
@@ -20,6 +20,7 @@ import {
 import { MOCK_FINANCIAL_DATA } from '@/lib/mock-data';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader2 } from 'lucide-react';
+import { fetchWithRetry } from '@/lib/utils';
 
 const chartConfigs = [
   { title: 'EVA', name: 'EVA', dataKey: 'eva', color: '#6366f1', suffix: '' },
@@ -33,44 +34,109 @@ const chartConfigs = [
 
 export default function TrendsPage() {
   const { isAuthenticated, loading } = useAuth();
-  const [selectedYear, setSelectedYear] = useState('2026');
-  const [selectedLOB, setSelectedLOB] = useState('Home & Lifestyle');
-  const [startMonth, setStartMonth] = useState('Jan');
-  const [endMonth, setEndMonth] = useState('Dec');
+  const [selectedLOB] = useState('Home & Lifestyle');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [incomeExpenseData, setIncomeExpenseData] = useState<any[]>([]);
+  const [ratioData, setRatioData] = useState<any[]>([]);
+  const [isDataLoading, setIsDataLoading] = useState(true);
 
-  const incomeExpenseData = useMemo(() => {
-    const years = ['2023', '2024', '2025', '2026'];
-    return years.map(year => {
-      const data = MOCK_FINANCIAL_DATA[selectedLOB]?.[year] || MOCK_FINANCIAL_DATA['Home & Lifestyle'][year];
-      return {
-        year,
-        revenue: data.revenue.actual * 100000, // scaled for chart
-        grossProfit: data.grossProfit.actual * 100000,
-        ebit: data.ebit.actual * 100000,
-        netIncome: data.netIncome.actual * 100000,
-      };
-    });
-  }, [selectedLOB]);
+  useEffect(() => {
+    if (loading || !isAuthenticated) return;
+    
+    const fetchData = async () => {
+      setIsDataLoading(true);
+      try {
+        const batchId = localStorage.getItem('upload_batch_id');
+        const token = localStorage.getItem('auth_token');
+        if (!batchId) throw new Error("No batch id");
+        const headers = { 'Authorization': `Bearer ${token}` };
+        const baseUrl = 'https://finsight-virtual-cfo-gjdhdjhzbva8hzbe.centralindia-01.azurewebsites.net';
 
-  const ratioData = useMemo(() => {
-    const years = ['2023', '2024', '2025', '2026'];
-    return years.map(year => {
-      const data = MOCK_FINANCIAL_DATA[selectedLOB]?.[year] || MOCK_FINANCIAL_DATA['Home & Lifestyle'][year];
-      return {
-        year,
-        eva: data.eva,
-        roa: data.roa,
-        roe: data.roe,
-        debtToEquity: data.debtToEquity,
-        wcRatio: data.wcRatio,
-        peRatio: data.peRatio,
-        berryRatio: data.berryRatio,
-      };
-    });
-  }, [selectedLOB]);
+        // 1. Fetch Years
+        const yearsRes = await fetchWithRetry(`${baseUrl}/reporting/pnl/years?batch_id=${batchId}`, { headers }).catch(() => null);
+        let years = ['2021', '2022', '2023', '2024', '2025'];
+        if (yearsRes && yearsRes.ok) {
+          const yearsData = await yearsRes.json();
+          if (yearsData.success && yearsData.data?.length > 0) {
+            years = yearsData.data.map((y: any) => String(y.value)).sort();
+          }
+        }
 
-  if (loading || !isAuthenticated) {
+        // 2. Fetch LOBs (use first available)
+        const lobsRes = await fetchWithRetry(`${baseUrl}/reporting/pnl/lobs?batch_id=${batchId}`, { headers }).catch(() => null);
+        let lob = 'Australia';
+        if (lobsRes && lobsRes.ok) {
+          const lobsData = await lobsRes.json();
+          if (lobsData.success && lobsData.data?.length > 0) {
+            lob = String(lobsData.data[0].value);
+          }
+        }
+
+        // 3. Fetch data for each year sequentially to avoid overwhelming the server
+        const results = [];
+        for (const year of years) {
+          const [pnlRes, kpiRes] = await Promise.all([
+            fetchWithRetry(`${baseUrl}/reporting/pnl/yearly-summary?batch_id=${batchId}&year=${year}&month_start=1&month_end=12&lob=${encodeURIComponent(lob)}`, { headers }).catch(() => null),
+            fetchWithRetry(`${baseUrl}/reporting/kpi/monthly?batch_id=${batchId}&year=${year}&month_start=1&month_end=12&lob=${encodeURIComponent(lob)}`, { headers }).catch(() => null)
+          ]);
+
+          let pnlData = null;
+          if (pnlRes && pnlRes.ok) {
+            const data = await pnlRes.json();
+            if (data.success) pnlData = data.data;
+          }
+
+          let kpiData = null;
+          if (kpiRes && kpiRes.ok) {
+            const data = await kpiRes.json();
+            if (data.success) kpiData = data.data;
+          }
+
+          results.push({ year, pnlData, kpiData });
+        }
+
+        // 4. Map results to Chart Data formats
+        const newIncomeExpense = results.map(({ year, pnlData }) => {
+          const mockRef = MOCK_FINANCIAL_DATA['Home & Lifestyle']?.[year];
+          
+          return {
+            year,
+            revenue: pnlData?.revenue ?? (mockRef ? mockRef.revenue.actual * 100000 : 0),
+            grossProfit: pnlData?.gross_profit ?? (mockRef ? mockRef.grossProfit.actual * 100000 : 0),
+            ebit: pnlData?.ebit ?? (mockRef ? mockRef.ebit.actual * 100000 : 0),
+            netIncome: pnlData?.net_income ?? (mockRef ? mockRef.netIncome.actual * 100000 : 0),
+          };
+        });
+
+        const newRatioData = results.map(({ year, kpiData }) => {
+          const mockRef = MOCK_FINANCIAL_DATA['Home & Lifestyle']?.[year];
+          
+          // Map KPI fields from API or fallback to 0 if mock doesn't exist
+          return {
+            year,
+            eva: kpiData?.eva?.value ?? mockRef?.eva ?? 0,
+            roa: kpiData?.roa?.value ?? mockRef?.roa ?? 0,
+            roe: kpiData?.roe?.value ?? mockRef?.roe ?? 0,
+            debtToEquity: kpiData?.debt_to_equity?.value ?? kpiData?.debtToEquity?.value ?? mockRef?.debtToEquity ?? 0,
+            wcRatio: kpiData?.working_capital_ratio?.value ?? kpiData?.wc_ratio?.value ?? kpiData?.wcRatio?.value ?? mockRef?.wcRatio ?? 0,
+            peRatio: kpiData?.pe_ratio?.value ?? kpiData?.peRatio?.value ?? mockRef?.peRatio ?? 0,
+            berryRatio: kpiData?.berry_ratio?.value ?? kpiData?.berryRatio?.value ?? mockRef?.berryRatio ?? 0,
+          };
+        });
+
+        setIncomeExpenseData(newIncomeExpense);
+        setRatioData(newRatioData);
+      } catch (e) {
+        console.error("Trends data fetch error", e);
+      } finally {
+        setIsDataLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [loading, isAuthenticated]);
+
+  if (loading || !isAuthenticated || isDataLoading) {
     return (
       <div className="min-h-screen bg-white dark:bg-[#09090b] flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
@@ -86,80 +152,19 @@ export default function TrendsPage() {
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
       
       <main className="flex-1 flex flex-col min-w-0">
-        <Header 
-          selectedYear={selectedYear} 
-          onYearChange={setSelectedYear}
-          selectedLOB={selectedLOB}
-          onLOBChange={setSelectedLOB}
-          isSidebarOpen={isSidebarOpen}
-          onSidebarToggle={() => setIsSidebarOpen(!isSidebarOpen)}
-        />
-        
         <div className="p-8 space-y-8 overflow-y-auto">
-          {/* Page Header & Filters */}
+          {/* Page Header */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-            <div>
-              <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Financial Trends</h1>
-              <p className="text-sm text-zinc-500 font-medium">Historical performance analysis and key financial ratios.</p>
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider px-1">LOB</span>
-                <select 
-                  value={selectedLOB}
-                  onChange={(e) => setSelectedLOB(e.target.value)}
-                  className="px-3 py-2 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors text-xs font-bold outline-none min-w-[120px]"
-                >
-                  <option value="Home & Lifestyle">Home & Lifestyle</option>
-                </select>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider px-1">Year</span>
-                <select 
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(e.target.value)}
-                  className="px-3 py-2 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors text-xs font-bold outline-none min-w-[120px]"
-                >
-                  <option value="2023">2023</option>
-                  <option value="2024">2024</option>
-                  <option value="2025">2025</option>
-                  <option value="2026">2026</option>
-                </select>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider px-1">Starting month</span>
-                <select 
-                  value={startMonth}
-                  onChange={(e) => setStartMonth(e.target.value)}
-                  className="px-3 py-2 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors text-xs font-bold outline-none min-w-[120px]"
-                >
-                  {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map(m => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider px-1">Ending month</span>
-                <select 
-                  value={endMonth}
-                  onChange={(e) => setEndMonth(e.target.value)}
-                  className="px-3 py-2 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors text-xs font-bold outline-none min-w-[120px]"
-                >
-                  {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map(m => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-bold text-transparent uppercase tracking-wider px-1">Action</span>
-                <button className="p-2 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-500/20 hover:bg-indigo-700 transition-all">
-                  <Filter className="w-4 h-4" />
-                </button>
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={() => setIsSidebarOpen(true)}
+                className="lg:hidden p-2 -ml-2 rounded-xl text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+              <div>
+                <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Financial Trends</h1>
+                <p className="text-sm text-zinc-500 font-medium">Historical performance analysis and key financial ratios.</p>
               </div>
             </div>
           </div>

@@ -35,20 +35,41 @@ const customerData = [
   },
 ];
 
-const COLORS = ['#6366f1', '#f97316', '#22c55e'];
+const COLORS = [
+  '#6366f1', // Whales
+  '#ec4899', // High Value
+  '#14b8a6', // Loyal
+  '#f59e0b', // Recent
+  '#8b5cf6', // Occasional
+];
+
+const CustomTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-xl shadow-2xl">
+        <p className="text-white font-bold text-sm mb-1">{data.name}</p>
+        <p className="text-zinc-400 text-xs">
+          Revenue: <span className="text-white font-bold">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(payload[0].value)}</span>
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
 
 const CustomizedContent = (props: any) => {
-  const { root, depth, x, y, width, height, index, name } = props;
+  const { root, depth, x, y, width, height, index, name, onMouseEnter, onMouseLeave } = props;
 
   return (
-    <g>
+    <g onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
       <rect
         x={x}
         y={y}
         width={width}
         height={height}
         style={{
-          fill: depth < 2 ? COLORS[index % COLORS.length] : 'none',
+          fill: depth === 1 ? COLORS[index % COLORS.length] : (depth === 2 ? 'rgba(0,0,0,0.1)' : 'none'),
           stroke: '#fff',
           strokeWidth: 2 / (depth + 1e-10),
           strokeOpacity: 1 / (depth + 1e-10),
@@ -59,9 +80,10 @@ const CustomizedContent = (props: any) => {
           x={x + width / 2}
           y={y + height / 2}
           textAnchor="middle"
-          fill="#fff"
-          fontSize={12}
+          fill="#ffffff"
+          fontSize={14}
           fontWeight="bold"
+          opacity={0.3}
         >
           {name}
         </text>
@@ -71,8 +93,8 @@ const CustomizedContent = (props: any) => {
           x={x + 4}
           y={y + 14}
           fill="#fff"
-          fontSize={10}
-          fontWeight="medium"
+          fontSize={11}
+          fontWeight="bold"
         >
           {name}
         </text>
@@ -83,7 +105,7 @@ const CustomizedContent = (props: any) => {
 
 export function CustomerTreemap({ data = customerData }: { data?: any[] }) {
   return (
-    <div className="h-[400px] w-full">
+    <div className="h-[600px] w-full">
       <ResponsiveContainer width="100%" height="100%">
         <Treemap
           data={data}
@@ -93,10 +115,7 @@ export function CustomerTreemap({ data = customerData }: { data?: any[] }) {
           fill="#8884d8"
           content={<CustomizedContent />}
         >
-          <Tooltip 
-            contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px', color: '#fff' }}
-            itemStyle={{ color: '#fff' }}
-          />
+          <Tooltip content={<CustomTooltip />} />
         </Treemap>
       </ResponsiveContainer>
     </div>

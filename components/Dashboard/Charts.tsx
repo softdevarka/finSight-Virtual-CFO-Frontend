@@ -14,6 +14,7 @@ import {
   Cell,
   Legend
 } from 'recharts';
+import { Loader2 } from 'lucide-react';
 
 import { TREND_DATA } from '@/lib/mock-data';
 
@@ -28,14 +29,14 @@ const costData = [
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
-    const isYTD = label === '2026';
+    const isProjected = Number(label) > 2025;
     return (
       <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-3 rounded-xl shadow-2xl">
         <p className="text-xs font-bold text-zinc-400 mb-1">
-          {label} {isYTD && '(YTD)'}
+          {label} {isProjected && '(Projected)'}
         </p>
         <p className="text-sm font-bold text-zinc-900 dark:text-white">
-          ${(payload[0].value / 1000000).toFixed(1)}M
+          ${(payload[0].value / 1000000).toFixed(2)}M
         </p>
       </div>
     );
@@ -44,10 +45,90 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export function RevenueTrendChart() {
+  const [data, setData] = React.useState<any[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const batchIdStr = localStorage.getItem('upload_batch_id');
+        const token = localStorage.getItem('auth_token');
+        if (!batchIdStr) {
+          setIsLoading(false);
+          return;
+        }
+
+        const payload = {
+          batch_id: Number(batchIdStr),
+          CCI: 95,
+          CPI: 3.2,
+          Oil: 57.26,
+          GDP: 731.418,
+          Unemployment: 4.1,
+          ROI: 3.6
+        };
+
+        const res = await fetch('/api/ml/predict/from-batch/1?prediction_start=2021-01-01&prediction_end=2028-12-31', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          const json = await res.json();
+          if (json && json.predictions) {
+            const yearlyData: Record<string, { actual: number, predicted: number }> = {};
+
+            json.predictions.forEach((row: any) => {
+              if (!row.order_date) return;
+              const year = row.order_date.substring(0, 4);
+              if (!yearlyData[year]) {
+                yearlyData[year] = { actual: 0, predicted: 0 };
+              }
+              yearlyData[year].actual += (row.actual_total_revenue || 0);
+              yearlyData[year].predicted += (row.predicted_total_revenue || 0);
+            });
+
+            const chartData = Object.keys(yearlyData).sort().map(year => {
+              // 2021 to 2025 has actuals, 2026 to 2028 relies on predicted
+              const isHistorical = Number(year) <= 2025;
+              const rev = isHistorical ? yearlyData[year].actual : yearlyData[year].predicted;
+              return {
+                name: year,
+                revenue: rev
+              };
+            });
+
+            setData(chartData);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch revenue trend data", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="h-[300px] w-full flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+      </div>
+    );
+  }
+
+  const chartData = data.length > 0 ? data : TREND_DATA;
+
   return (
     <div className="h-[300px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={TREND_DATA} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+        <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
@@ -66,7 +147,7 @@ export function RevenueTrendChart() {
             axisLine={false} 
             tickLine={false} 
             tick={{ fill: '#71717a', fontSize: 10, fontWeight: 600 }}
-            tickFormatter={(value) => `$${value / 1000000}M`}
+            tickFormatter={(value) => `$${(value / 1000000).toFixed(0)}M`}
           />
           <Tooltip content={<CustomTooltip />} />
           <Area 
@@ -84,13 +165,23 @@ export function RevenueTrendChart() {
   );
 }
 
-export function CostBreakupChart() {
+export function CostBreakupChart({ data, isLoading }: { data?: any[], isLoading?: boolean }) {
+  const chartData = data && data.length > 0 ? data : costData;
+
+  if (isLoading) {
+    return (
+      <div className="h-[240px] w-full flex items-center justify-center">
+        <div className="w-48 h-48 rounded-full border-[16px] border-zinc-100 dark:border-zinc-800/50 animate-pulse" />
+      </div>
+    );
+  }
+
   return (
     <div className="h-[240px] w-full">
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
-            data={costData}
+            data={chartData}
             cx="50%"
             cy="50%"
             innerRadius={60}
@@ -98,7 +189,7 @@ export function CostBreakupChart() {
             paddingAngle={5}
             dataKey="value"
           >
-            {costData.map((entry, index) => (
+            {chartData.map((entry: any, index: number) => (
               <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
             ))}
           </Pie>
