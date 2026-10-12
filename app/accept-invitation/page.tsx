@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { motion } from 'motion/react';
@@ -18,7 +18,7 @@ import {
 import Link from 'next/link';
 import { fetchWithRetry } from '@/lib/utils';
 
-export default function AcceptInvitationPage() {
+function AcceptInvitationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
@@ -221,5 +221,19 @@ export default function AcceptInvitationPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AcceptInvitationPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] flex items-center justify-center">
+          <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <AcceptInvitationContent />
+    </Suspense>
   );
 }

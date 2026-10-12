@@ -172,21 +172,21 @@ export default function DashboardPage() {
             || MOCK_FINANCIAL_DATA['Home & Lifestyle']['2026'];
 
           // Dynamic forecasts if available
-          let revForecasted = mockRef.revenue.forecasted;
-          let revChange = mockRef.revenue.change;
-          let gpForecasted = mockRef.grossProfit.forecasted;
-          let gpChange = mockRef.grossProfit.change;
+          let revForecasted: string | number = mockRef.revenue.forecasted;
+          let revChange: string | number = mockRef.revenue.change;
+          let gpForecasted: string | number = mockRef.grossProfit.forecasted;
+          let gpChange: string | number = mockRef.grossProfit.change;
           
-          let ebitForecasted = mockRef.ebit.forecasted;
-          let ebitChange = mockRef.ebit.change;
-          let ebitPctForecasted = mockRef.ebitPercent.forecasted;
-          let ebitPctChange = mockRef.ebitPercent.change;
+          let ebitForecasted: string | number = mockRef.ebit.forecasted;
+          let ebitChange: string | number = mockRef.ebit.change;
+          let ebitPctForecasted: string | number = mockRef.ebitPercent.forecasted;
+          let ebitPctChange: string | number = mockRef.ebitPercent.change;
           
-          let opexForecasted = mockRef.opEx.forecasted;
-          let opexChange = mockRef.opEx.change;
+          let opexForecasted: string | number = mockRef.opEx.forecasted;
+          let opexChange: string | number = mockRef.opEx.change;
           
-          let niForecasted = mockRef.netIncome.forecasted;
-          let niChange = mockRef.netIncome.change;
+          let niForecasted: string | number = mockRef.netIncome.forecasted;
+          let niChange: string | number = mockRef.netIncome.change;
 
           const calcChange = (actual: number, pred: number) => {
             if (!pred || pred === 0) return "+0.0%";
